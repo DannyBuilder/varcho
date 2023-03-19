@@ -6,6 +6,7 @@ public class DyslexiaGameController : MonoBehaviour
 {
     public Text wordDisplay;
     public Text resultDisplay;
+    public Text feedbackDisplay;
     public Button[] syllableButtons;
 
     private List<WordData> wordsData;
@@ -27,18 +28,21 @@ public class DyslexiaGameController : MonoBehaviour
         // Manually defined words with missing syllables
         wordsData = new List<WordData>
         {
-            new WordData { word = "миш__", syllableOptions = new string[] { "ка", "па", "ма" }, correctSyllableIndex = 0 },
-            new WordData { word = "лам__", syllableOptions = new string[] { "па", "ка", "са" }, correctSyllableIndex = 0 },
-            new WordData { word = "лег__", syllableOptions = new string[] { "ло", "лу", "зо" }, correctSyllableIndex = 0 },
-            new WordData { word = "ябъл__", syllableOptions = new string[] { "ка", "къ", "ца" }, correctSyllableIndex = 0 },
-            new WordData { word = "кот__", syllableOptions = new string[] { "ка", "па", "ла" }, correctSyllableIndex = 0 },
-            new WordData { word = "ку__", syllableOptions = new string[] { "че", "це", "ме" }, correctSyllableIndex = 0 },
+            new WordData { word = "зи__", syllableOptions = new string[] { "ва", "ра", "ма" }, correctSyllableIndex = 2 },
+            new WordData { word = "ли__", syllableOptions = new string[] { "дон", "мон", "сон" }, correctSyllableIndex = 1 },
+            new WordData { word = "ди__", syllableOptions = new string[] { "ня", "за", "ка" }, correctSyllableIndex = 0 },
+            new WordData { word = "дъ__", syllableOptions = new string[] { "ло", "ро", "жд" }, correctSyllableIndex = 2 },
+            new WordData { word = "ду__", syllableOptions = new string[] { "га", "ма", "да" }, correctSyllableIndex = 1 },
+            new WordData { word = "те__", syllableOptions = new string[] { "ма", "га", "ра" }, correctSyllableIndex = 0 },
+            new WordData { word = "де__", syllableOptions = new string[] { "ха", "на", "те" }, correctSyllableIndex = 2},
+
             // Add more words here
         };
 
         firstGuess = true;
         remainingWords = new List<WordData>(wordsData);
         resultDisplay.enabled = false; // Disable resultDisplay at the start
+        feedbackDisplay.gameObject.SetActive(false);
         DisplayRandomWord();
     }
 
@@ -64,39 +68,110 @@ public class DyslexiaGameController : MonoBehaviour
             int buttonIndex = randomButtonIndex;
             syllableButtons[i].onClick.RemoveAllListeners();
             syllableButtons[i].onClick.AddListener(() => CheckAnswer(buttonIndex));
+            syllableButtons[i].image.color = Color.blue; // Reset button color
         }
     }
 
     void CheckAnswer(int buttonIndex)
+{
+    if (firstGuess)
     {
-        if (firstGuess)
-        {
-            startTime = Time.time;
-            firstGuess = false;
-        }
-
-        if (buttonIndex == currentWordData.correctSyllableIndex)
-        {
-            wordDisplay.text = currentWordData.word.Replace("__", currentWordData.syllableOptions[buttonIndex]);
-            // Proceed to next word after a delay
-            Invoke(nameof(DisplayRandomWord), 2f);
-        }
-        else
-        {
-            // Display incorrect message and allow the user to try again
-        }
+        startTime = Time.time;
+        firstGuess = false;
     }
 
-    void FinishGame()
+    if (buttonIndex == currentWordData.correctSyllableIndex)
+    {
+        wordDisplay.text = currentWordData.word.Replace("__", currentWordData.syllableOptions[buttonIndex]);
+        
+        // Find the index of the correct button in the syllableButtons array
+        int indexOfCorrectButton = System.Array.FindIndex(syllableButtons, button => button.GetComponentInChildren<Text>().text == currentWordData.syllableOptions[buttonIndex]);
+
+        // Change the button color to green
+        StartCoroutine(CorrectAnswer(indexOfCorrectButton));
+
+        // Proceed to the next word after a delay
+        Invoke(nameof(DisplayRandomWord), 2f);
+    }
+    else
+    {
+        // Find the index of the incorrect button in the syllableButtons array
+        int indexOfIncorrectButton = System.Array.FindIndex(syllableButtons, button => button.GetComponentInChildren<Text>().text == currentWordData.syllableOptions[buttonIndex]);
+
+        // Display incorrect message and change button color
+        StartCoroutine(IncorrectAnswer(indexOfIncorrectButton));
+    }
+}
+
+System.Collections.IEnumerator CorrectAnswer(int indexOfCorrectButton)
+{
+    Button correctButton = syllableButtons[indexOfCorrectButton];
+    Color originalColor = correctButton.image.color;
+    correctButton.image.color = Color.green;
+
+    yield return new WaitForSeconds(1f);
+
+    correctButton.image.color = originalColor;
+}
+
+
+
+System.Collections.IEnumerator IncorrectAnswer(int indexOfIncorrectButton)
+{
+    feedbackDisplay.text = "Опитай пак!";
+    feedbackDisplay.gameObject.SetActive(true);
+
+    Button incorrectButton = syllableButtons[indexOfIncorrectButton];
+    Color originalColor = incorrectButton.image.color;
+    incorrectButton.image.color = Color.red;
+
+    yield return new WaitForSeconds(1f);
+
+    feedbackDisplay.gameObject.SetActive(false);
+    incorrectButton.image.color = originalColor;
+}
+
+
+       void FinishGame()
     {
         float totalTime = Time.time - startTime;
-        resultDisplay.text = $"Good job! You completed the game in {totalTime:0.00} seconds.";
-        resultDisplay.enabled = true; // Enable resultDisplay when the game is complete
+        int minutes = Mathf.FloorToInt(totalTime / 60);
+        int seconds = Mathf.FloorToInt(totalTime % 60);
+
+        resultDisplay.text = $"Браво! Твоето време е {minutes:00}:{seconds:00}";
+        resultDisplay.enabled = true;
+
         wordDisplay.gameObject.SetActive(false);
 
         foreach (Button button in syllableButtons)
         {
             button.gameObject.SetActive(false);
         }
+        float bestScore = PlayerPrefs.GetFloat("BestScore", float.MaxValue);
+    if (totalTime < bestScore)
+    {
+        PlayerPrefs.SetFloat("BestScore", totalTime);
+    }
+
+    // Save the last five scores
+    List<float> lastFiveScores = new List<float>();
+    for (int i = 0; i < 5; i++)
+    {
+        if (PlayerPrefs.HasKey($"LastScore{i}"))
+        {
+            lastFiveScores.Add(PlayerPrefs.GetFloat($"LastScore{i}"));
+        }
+    }
+    lastFiveScores.Add(totalTime);
+    if (lastFiveScores.Count > 5)
+    {
+        lastFiveScores.RemoveAt(0);
+    }
+    for (int i = 0; i < lastFiveScores.Count; i++)
+    {
+        PlayerPrefs.SetFloat($"LastScore{i}", lastFiveScores[i]);
+    }
+
+    PlayerPrefs.Save();
     }
 }
